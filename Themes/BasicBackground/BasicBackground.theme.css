@@ -18,18 +18,18 @@
 
 :root {
 	--transparencycolor:			0,0,0;						/* default:	0,0,0																								*/
-	--transparencyalpha:			0.15;						/* default: 0.15				(general darkness of the app)													*/
-	--messagetransparency:			0.5;						/* default: 0.5					(additional shadows behind messages, set to 0 to remove boxes)					*/
+	--transparencyalpha:			0.4;						/* default: 0.15				(general darkness of the app)													*/
+	--messagetransparency:			0.6;						/* default: 0.5					(additional shadows behind messages, set to 0 to remove boxes)					*/
 	--guildchanneltransparency:		0.15;						/* default: 0.15				(additional darkness for guild/channel list)									*/
-	--chatinputtransparency:		0.0;						/* default: 0.0					(additional darkness for chat input container)									*/
-	--memberlisttransparency:		0.0;						/* default: 0.0					(additional darkness for member list)											*/
+	--chatinputtransparency:		0.2;						/* default: 0.0					(additional darkness for chat input container)									*/
+	--memberlisttransparency:		0.2;						/* default: 0.0					(additional darkness for member list)											*/
 	--accentcolor:					190,78,180;					/* default: 190,78,180			(RGB-format - blurple: 88,101,242 bd-blue: 58,113,193)							*/
 	
 	--font:							Whitney, Helvetica Neue, Helvetica, Arial, sans-serif;		/* font used in most places														*/
 	--textshadow:					transparent;				/* default: transparent			(textshadow for text ontop of accentcolor nodes, ONLY accepts a color, no px)	*/
 	--settingsicons:				1;							/* Use Settings Icons in User/Server/Channel Settings: 1 = yes, 0 = no											*/
 	
-	--background:					url(https://mwittrien.github.io/BetterDiscordAddons/Themes/BasicBackground/_res/background.jpg);	/* general background image				*/
+	--background:					url(https://i.imgur.com/z4h7XYU.jpeg);	/* general background image				*/
 	--backgroundposition:			center;						/* default: center				(position of background - values: [center/top/right/bottom/left])				*/
 	--backgroundsize:				cover;						/* default: cover				(sizefit of background - values: [cover/contain/auto])							*/
 	--backgroundblur:				unset;						/* default: unset				(blur in px, only works when --background is set to an image)					*/
