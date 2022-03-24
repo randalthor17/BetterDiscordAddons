@@ -27,15 +27,7 @@ module.exports = (_ => {
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -74,7 +66,7 @@ module.exports = (_ => {
 		}
 	} : (([Plugin, BDFDB]) => {
 		var _this;
-		var loadedUsers, requestedUsers;
+		var loadedUsers, requestedUsers, queuedInstances;
 		var currentPopout, currentProfile;
 		
 		return class JoinedAtDate extends Plugin {
@@ -82,6 +74,7 @@ module.exports = (_ => {
 				_this = this;
 				loadedUsers = {};
 				requestedUsers = {};
+				queuedInstances = {};
 
 				this.defaults = {
 					general: {
@@ -195,22 +188,29 @@ module.exports = (_ => {
 
 			injectDate (children, index, user, guildId) {
 				if (!guildId) guildId = BDFDB.LibraryModules.LastGuildStore.getGuildId();
-				if (!BDFDB.ArrayUtils.is(children) || !user || !guildId || user.discriminator == "0000" || !BDFDB.LibraryModules.MemberStore.getMember(guildId, user.id)) return;
+				if (!BDFDB.ArrayUtils.is(children) || !user || !guildId || user.isNonUserBot() || !BDFDB.LibraryModules.MemberStore.getMember(guildId, user.id)) return;
 				
 				if (!loadedUsers[guildId]) loadedUsers[guildId] = {};
 				if (!requestedUsers[guildId]) requestedUsers[guildId] = {};
+				if (!queuedInstances[guildId]) queuedInstances[guildId] = {};
 				
-				if (!BDFDB.ArrayUtils.is(requestedUsers[guildId][user.id])) {
-					requestedUsers[guildId][user.id] = [];
+				if (!loadedUsers[guildId][user.id] && !requestedUsers[guildId][user.id]) {
+					requestedUsers[guildId][user.id] = true;
+					queuedInstances[guildId][user.id] = [].concat(queuedInstances[guildId][user.id]).filter(n => n);
 					BDFDB.LibraryModules.APIUtils.get(BDFDB.DiscordConstants.Endpoints.GUILD_MEMBER(guildId, user.id)).then(result => {
-						loadedUsers[guildId][user.id] = new Date(result.body.joined_at);
-						for (let queuedInstance of requestedUsers[guildId][user.id]) BDFDB.ReactUtils.forceUpdate(queuedInstance);
+						delete requestedUsers[guildId][user.id];
+						if (typeof result.body.retry_after != "number") {
+							loadedUsers[guildId][user.id] = new Date(result.body.joined_at);
+							BDFDB.ReactUtils.forceUpdate(queuedInstances[guildId][user.id]);
+							delete queuedInstances[guildId][user.id];
+						}
+						else BDFDB.TimeUtils.timeout(_ => this.injectDate(children, index, user, guildId), result.body.retry_after + 500);
 					});
 				}
 				children.splice(index, 0, BDFDB.ReactUtils.createElement(class extends BDFDB.ReactUtils.Component {
 					render() {
 						if (!loadedUsers[guildId][user.id]) {
-							if (requestedUsers[guildId][user.id].indexOf(this) == -1) requestedUsers[guildId][user.id].push(this);
+							if (queuedInstances[guildId][user.id].indexOf(this) == -1) queuedInstances[guildId][user.id].push(this);
 							return null;
 						}
 						else {
@@ -229,6 +229,10 @@ module.exports = (_ => {
 					case "bg":		// Bulgarian
 						return {
 							joined_at:							"Присъединил се на {{time}}"
+						};
+					case "cs":		// Czech
+						return {
+							joined_at:							"Připojeno {{time}}"
 						};
 					case "da":		// Danish
 						return {
@@ -253,6 +257,10 @@ module.exports = (_ => {
 					case "fr":		// French
 						return {
 							joined_at:							"Rejoint le {{time}}"
+						};
+					case "hi":		// Hindi
+						return {
+							joined_at:							"{{time}} को शामिल हुए"
 						};
 					case "hr":		// Croatian
 						return {

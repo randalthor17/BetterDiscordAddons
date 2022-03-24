@@ -2,7 +2,7 @@
  * @name PersonalPins
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 2.0.4
+ * @version 2.0.8
  * @description Allows you to locally pin Messages
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "PersonalPins",
 			"author": "DevilBro",
-			"version": "2.0.4",
+			"version": "2.0.8",
 			"description": "Allows you to locally pin Messages"
-		},
-		"changeLog": {
-			"added": {
-				"Amount": "Added the shown and total amount of pinned messages"
-			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -116,12 +103,12 @@ module.exports = (_ => {
 							notes[guild_id][channel_id][message_idPOS].channel = JSON.stringify(channel);
 						}
 					}
-					messages.push({
+					if (!BDFDB.MessageUtils.isSystemMessage(message)) messages.push({
 						note: notes[guild_id][channel_id][message_idPOS],
-						channel_id,
-						guild_id,
-						message,
-						channel,
+						channel_id: channel_id,
+						guild_id: guild_id,
+						message: message,
+						channel: channel,
 						messagetime: notes[guild_id][channel_id][message_idPOS].timestamp,
 						notetime: notes[guild_id][channel_id][message_idPOS].addedat
 					});
@@ -131,10 +118,10 @@ module.exports = (_ => {
 				let currentChannel = BDFDB.LibraryModules.ChannelStore.getChannel(BDFDB.LibraryModules.LastChannelStore.getChannelId()) || {};
 				switch (popoutProps.selectedFilter.value) {
 					case "channel":
-						messages = messages.filter(messageData => messageData.channel_id == currentChannel.id);
+						messages = messages.filter(m => m.channel_id == currentChannel.id);
 						break;
 					case "server":
-						messages = messages.filter(messageData => messageData.guild_id == (currentChannel.guild_id || BDFDB.DiscordConstants.ME));
+						messages = messages.filter(m => m.guild_id == (currentChannel.guild_id || BDFDB.DiscordConstants.ME));
 						break;
 					case "allservers":
 						messages = messages;
@@ -143,7 +130,7 @@ module.exports = (_ => {
 				let searchKey = popoutProps.searchKey.toUpperCase();
 				if (searchKey) {
 					let searchValues = ["content", "author.username", "rawDescription", "author.name"];
-					messages = messages.filter(messageData => searchValues.some(key => this.containsSearchkey(messageData.message, key, searchKey) || messageData.message.embeds.some(embed => this.containsSearchkey(embed, key, searchKey))));
+					messages = messages.filter(m => searchValues.some(key => this.containsSearchkey(m.message, key, searchKey) || m.message.embeds.some(embed => this.containsSearchkey(embed, key, searchKey))));
 				}
 				BDFDB.ArrayUtils.keySort(messages, popoutProps.selectedSort.value);
 				if (popoutProps.selectedOrder.value != "descending") messages.reverse();
@@ -213,7 +200,7 @@ module.exports = (_ => {
 															BDFDB.LibraryRequires.electron.clipboard.write({image: BDFDB.LibraryRequires.electron.nativeImage.createFromBuffer(body)});
 														}
 														else {
-															let file = BDFDB.LibraryRequires.path.join(BDFDB.LibraryRequires.process.env["HOME"], "personalpinstemp.png");
+															let file = BDFDB.LibraryRequires.path.join(BDFDB.LibraryRequires.process.env.USERPROFILE || BDFDB.LibraryRequires.process.env.HOMEPATH || BDFDB.LibraryRequires.process.env.HOME, "personalpinstemp.png");
 															BDFDB.LibraryRequires.fs.writeFileSync(file, body, {encoding: null});
 															BDFDB.LibraryRequires.electron.clipboard.write({image: file});
 															BDFDB.LibraryRequires.fs.unlinkSync(file);
@@ -353,6 +340,14 @@ module.exports = (_ => {
 			
 			onStart () {
 				notes = BDFDB.DataUtils.load(this, "notes");
+				
+				BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.DispatchApiUtils, "dispatch", {after: e => {
+					if (BDFDB.ObjectUtils.is(e.methodArguments[0]) && e.methodArguments[0].type == BDFDB.DiscordConstants.ActionTypes.MESSAGE_DELETE) {
+						let note = this.getNoteData({id: e.methodArguments[0].id, channel_id: e.methodArguments[0].channelId});
+						if (note) this.removeNoteData(note, true);
+					}
+				}});
+				
 				BDFDB.PatchUtils.forceAllUpdates(this);
 			}
 			
@@ -413,11 +408,17 @@ module.exports = (_ => {
 						hint: hint && (_ => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.MenuItems.MenuHint, {
 							hint: hint
 						})),
+						icon: _ => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.MenuItems.MenuIcon, {
+							icon: note ? pinIconDelete : pinIcon
+						}),
 						action: _ => this.addMessageToNotes(e.instance.props.message, e.instance.props.channel)
 					}));
 					if (this.isNoteOutdated(note, e.instance.props.message)) children.splice(index > -1 ? index + 1: 0, 0, BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuItem, {
 						label: this.labels.context_updateoption,
 						id: BDFDB.ContextMenuUtils.createItemId(this.name, "update-note"),
+						icon: _ => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.MenuItems.MenuIcon, {
+							icon: pinIconUpdate
+						}),
 						action: _ => this.updateNoteData(note, e.instance.props.message)
 					}));
 				}
@@ -502,7 +503,7 @@ module.exports = (_ => {
 					animation: BDFDB.LibraryComponents.PopoutContainer.Animation.SCALE,
 					position: BDFDB.LibraryComponents.PopoutContainer.Positions.BOTTOM,
 					align: BDFDB.LibraryComponents.PopoutContainer.Align.RIGHT,
-					width: 650,
+					width: 750,
 					maxHeight: "calc(100vh - 100px)",
 					onClose: instance => BDFDB.DOMUtils.removeClass(instance.domElementRef.current, BDFDB.disCN.channelheadericonselected),
 					renderPopout: instance => {
@@ -565,7 +566,7 @@ module.exports = (_ => {
 				BDFDB.NotificationUtils.toast(this.labels.toast_noteupdate, {type: "info"});
 			}
 
-			removeNoteData (note) {
+			removeNoteData (note, noToast = false) {
 				let message = JSON.parse(note.message);
 				let channel = JSON.parse(note.channel);
 				if (!message || !channel) return;
@@ -576,7 +577,7 @@ module.exports = (_ => {
 					if (BDFDB.ObjectUtils.isEmpty(notes[guild_id])) delete notes[guild_id];
 				}
 				BDFDB.DataUtils.save(notes, this, "notes");
-				BDFDB.NotificationUtils.toast(this.labels.toast_noteremove, {type: "danger"});
+				if (!noToast) BDFDB.NotificationUtils.toast(this.labels.toast_noteremove, {type: "danger"});
 			}
 
 

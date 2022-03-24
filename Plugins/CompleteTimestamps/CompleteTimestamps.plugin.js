@@ -2,7 +2,7 @@
  * @name CompleteTimestamps
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.5.7
+ * @version 1.6.1
  * @description Replaces Timestamps with your own custom Timestamps
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,26 +17,17 @@ module.exports = (_ => {
 		"info": {
 			"name": "CompleteTimestamps",
 			"author": "DevilBro",
-			"version": "1.5.7",
+			"version": "1.6.1",
 			"description": "Replaces Timestamps with your own custom Timestamps"
 		},
 		"changeLog": {
-			"fixed": {
-				"Works again": "",
-				"Edit Stamp Compact Mode": "Fixed Issue where the (edited) stamp would grow in size in compact mode"
+			"improved": {
+				"Markup Timestamps": "Only changes Timestamps with no formatting flag or the lowercase f flag, since those are the standard timestamps, meaning it does no longer change markup timestamps with a relative R or full flag F"
 			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -85,9 +76,11 @@ module.exports = (_ => {
 					general: {
 						showInChat:				{value: true, 			description: "Replace Chat Timestamps with complete Timestamps"},
 						showInEmbed:			{value: true, 			description: "Replace Embed Timestamps with complete Timestamps"},
+						showInMarkup:			{value: true, 			description: "Replace Markup Timestamps with complete Timestamps"},
 						showInAuditLogs:		{value: true, 			description: "Replace Audit Log Timestamps with complete Timestamps"},
 						changeForChat:			{value: true, 			description: "Change the Time for Chat Time Tooltips"},
-						changeForEdit:			{value: true, 			description: "Change the Time for Edited Time Tooltips"}
+						changeForEdit:			{value: true, 			description: "Change the Time for Edited Time Tooltips"},
+						changeForMarkup:		{value: true, 			description: "Change the Time for Markup Timestamp Tooltips"}
 					},
 					dates: {
 						timestampDate:			{value: {}, 			description: "Chat Timestamp"},
@@ -101,7 +94,7 @@ module.exports = (_ => {
 						MessageTimestamp: "default",
 						Embed: "render",
 						SystemMessage: "default",
-						AuditLog: "render"
+						GuildSettingsAuditLogEntry: "render"
 					}
 				};
 				
@@ -113,6 +106,22 @@ module.exports = (_ => {
 			}
 			
 			onStart () {
+				BDFDB.LibraryModules.MessageParser && BDFDB.LibraryModules.MessageParser.defaultRules && BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.MessageParser.defaultRules.timestamp, "react", {after: e => {
+					const date = 1e3*Number(e.methodArguments[0].timestamp);
+					if (this.settings.general.showInMarkup && e.methodArguments[0].formatted == BDFDB.LibraryModules.MessageParser.defaultRules.timestamp.parse([null, e.methodArguments[0].timestamp, "f"]).formatted) {
+						if (tooltipIsSame) e.returnValue.props.delay = 99999999999999999999;
+						let timestamp = this.formatTimestamp(this.settings.dates.timestampDate, date);
+						let renderChildren = e.returnValue.props.children;
+						e.returnValue.props.children = (...args) => {
+							let renderedChildren = renderChildren(...args);
+							if (BDFDB.ArrayUtils.is(renderedChildren.props.children)) renderedChildren.props.children[1] = timestamp;
+							else renderedChildren.props.children = timestamp;
+							return renderedChildren;
+						};
+					}
+					if (this.settings.general.changeForMarkup) e.returnValue.props.text = this.formatTimestamp(this.settings.dates.tooltipDate, date);
+				}});
+				
 				this.forceUpdateAll();
 			}
 			
@@ -169,7 +178,7 @@ module.exports = (_ => {
 				BDFDB.PatchUtils.forceAllUpdates(this);
 				BDFDB.MessageUtils.rerenderAll();
 			}
-
+			
 			processMessage (e) {
 				if (MessageTimestampComponent) {
 					let timestamp = BDFDB.ReactUtils.findChild(e.returnvalue, {filter: c => c && c.type && c.type.type && c.type.type.displayName == "MessageTimestamp"});
@@ -185,7 +194,6 @@ module.exports = (_ => {
 					if (this.settings.general.changeForEdit) tooltipWrapper.props.text = this.formatTimestamp(this.settings.dates.tooltipDate, e.instance.props.timestamp._i);
 				}
 				else {
-					if (this.settings.general.changeForChat) tooltipWrapper.props.text = this.formatTimestamp(this.settings.dates.tooltipDate, e.instance.props.timestamp._i);
 					if (this.settings.general.showInChat && !e.instance.props.cozyAlt) {
 						if (tooltipIsSame) tooltipWrapper.props.delay = 99999999999999999999;
 						let timestamp = this.formatTimestamp(this.settings.dates.timestampDate, e.instance.props.timestamp._i);
@@ -198,6 +206,7 @@ module.exports = (_ => {
 						};
 						this.setMaxWidth(e.returnvalue, e.instance.props.compact);
 					}
+					if (this.settings.general.changeForChat) tooltipWrapper.props.text = this.formatTimestamp(this.settings.dates.tooltipDate, e.instance.props.timestamp._i);
 				}
 			}
 
@@ -212,11 +221,11 @@ module.exports = (_ => {
 					};
 					if (typeof e.returnvalue.props.children == "function") {
 						let childrenRender = e.returnvalue.props.children;
-						e.returnvalue.props.children = (...args) => {
+						e.returnvalue.props.children = BDFDB.TimeUtils.suppress((...args) => {
 							let children = childrenRender(...args);
 							process(children);
 							return children;
-						};
+						}, "", this);
 					}
 					else process(e.returnvalue);
 				}
@@ -229,15 +238,15 @@ module.exports = (_ => {
 				}
 			}
 
-			processAuditLog (e) {
+			processGuildSettingsAuditLogEntry (e) {
 				if (e.instance.props.log && this.settings.general.showInAuditLogs) {
 					if (typeof e.returnvalue.props.children == "function") {
 						let childrenRender = e.returnvalue.props.children;
-						e.returnvalue.props.children = (...args) => {
+						e.returnvalue.props.children = BDFDB.TimeUtils.suppress((...args) => {
 							let children = childrenRender(...args);
 							this.editLog(e.instance.props.log, children);
 							return children;
-						};
+						}, "", this);
 					}
 					else this.editLog(e.instance.props.log, e.returnvalue);
 				}
@@ -275,7 +284,6 @@ module.exports = (_ => {
 							}
 						`);
 					}
-					 
 				}
 			}
 		};

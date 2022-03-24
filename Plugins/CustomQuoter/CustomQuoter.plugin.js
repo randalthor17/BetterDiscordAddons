@@ -30,15 +30,7 @@ module.exports = (_ => {
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -300,7 +292,7 @@ module.exports = (_ => {
 					let [children, index] = BDFDB.ContextMenuUtils.findItem(e.returnvalue, {id: "quote"});
 					if (index > -1) {
 						item = children[index];
-						item.props.action = event => {action(null, event.shiftKey);};
+						item.props.action = event => action(null, event.shiftKey);
 					}
 					else {
 						item = BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuItem, {
@@ -320,12 +312,14 @@ module.exports = (_ => {
 						}))
 					});
 					else {
+						item.props.icon = _ => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.SvgIcon, {
+							className: BDFDB.disCN.menuicon,
+							name: BDFDB.LibraryComponents.SvgIcon.Names.QUOTE
+						});
 						let hint = BDFDB.BDUtils.isPluginEnabled("MessageUtilities") ? BDFDB.BDUtils.getPlugin("MessageUtilities").getActiveShortcutString("__Quote_Message") : null;
-						if (hint) item.props.hint = _ => {
-							return BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.MenuItems.MenuHint, {
-								hint: hint
-							});
-						};
+						if (hint) item.props.hint = _ => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.MenuItems.MenuHint, {
+							hint: hint
+						});
 					}
 				}
 			}
@@ -338,12 +332,10 @@ module.exports = (_ => {
 						children.splice(index > -1 ? index : 0, 0, BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuItem, {
 							label: BDFDB.LanguageUtils.LanguageStrings.QUOTE,
 							id: BDFDB.ContextMenuUtils.createItemId(this.name, "quote"),
-							icon: _ => {
-								return BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.SvgIcon, {
-									className: BDFDB.disCN.menuicon,
-									name: BDFDB.LibraryComponents.SvgIcon.Names.QUOTE
-								});
-							},
+							icon: _ => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.SvgIcon, {
+								className: BDFDB.disCN.menuicon,
+								name: BDFDB.LibraryComponents.SvgIcon.Names.QUOTE
+							}),
 							action: event => {
 								this.quote(e.instance.props.channel, e.instance.props.message, event.shiftKey);
 							}

@@ -2,7 +2,7 @@
  * @name CharCounter
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.5.4
+ * @version 1.6.0
  * @description Adds a Character Counter to most Inputs
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "CharCounter",
 			"author": "DevilBro",
-			"version": "1.5.4",
+			"version": "1.6.0",
 			"description": "Adds a Character Counter to most Inputs"
-		},
-		"changeLog": {
-			"improved": {
-				"Nitro Max Message Length": "Now uses 4000 as Max Limit when the user has the permissions to"
-			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -81,8 +68,11 @@ module.exports = (_ => {
 		};
 		const typeMap = {
 			normal: "chat",
+			sidebar: "chat",
+			thread_creation: "threadcreation",
 			form: "upload"
 		};
+		const nativeCounters = ["profile_bio_input"];
 	
 		return class CharCounter extends Plugin {
 			onLoad () {
@@ -90,8 +80,14 @@ module.exports = (_ => {
 					after: {
 						ChannelTextAreaContainer: "render",
 						Note: "render",
-						ChangeIdentity: "default",
+						NicknameSection: "default",
 						CustomStatusModal: "render"
+					}
+				};
+				
+				this.defaults = {
+					sliders: {
+						showPercentage:			{value: 0,				description: "Only shows Counter after certain % of Max Length is reached"}
 					}
 				};
 				
@@ -114,14 +110,17 @@ module.exports = (_ => {
 						right: 0;
 						bottom: -1.3em;
 					}
+					${BDFDB.dotCN._charcounterthreadcreationcounter} {
+						right: 0;
+						bottom: -1.1em;
+					}
 					${BDFDB.dotCN._charcounteruploadcounter} {
 						right: 0;
 						bottom: -1.0em;
 					}
 					${BDFDB.dotCN._charcounternickcounter} {
-						position: static !important;
-						text-align: right !important;
-						margin-bottom: -16px !important;
+						right: 0 !important;
+						top: -1.5em;
 					}
 					${BDFDB.dotCN._charcountercustomstatuscounter} {
 						right: 0 !important;
@@ -151,11 +150,39 @@ module.exports = (_ => {
 				BDFDB.PatchUtils.forceAllUpdates(this);
 			}
 
+			getSettingsPanel (collapseStates = {}) {
+				let settingsPanel;
+				return settingsPanel = BDFDB.PluginUtils.createSettingsPanel(this, {
+					collapseStates: collapseStates,
+					children: _ => {
+						let settingsItems = [];
+						
+						for (let key in this.defaults.sliders) settingsItems.push(BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.SettingsSaveItem, {
+							type: "Slider",
+							plugin: this,
+							keys: ["sliders", key],
+							basis: "30%",
+							label: this.defaults.sliders[key].description,
+							value: this.settings.sliders[key]
+						}));
+						
+						return settingsItems;
+					}
+				});
+			}
+
+			onSettingsClosed () {
+				if (this.SettingsUpdated) {
+					delete this.SettingsUpdated;
+					BDFDB.PatchUtils.forceAllUpdates(this);
+				}
+			}
+
 			processChannelTextAreaContainer (e) {
 				let editorContainer = BDFDB.ReactUtils.findChild(e.returnvalue, {name: "ChannelEditorContainer"});
 				if (editorContainer && editorContainer.props.type && !editorContainer.props.disabled) {
 					if (!BDFDB.ArrayUtils.is(e.returnvalue.props.children)) e.returnvalue.props.children = [e.returnvalue.props.children];
-					this.injectCounter(e.returnvalue, e.returnvalue.props.children, editorContainer.props.type, BDFDB.dotCN.textarea, true);
+					this.injectCounter(e.returnvalue, e.returnvalue.props.children, editorContainer.props.type.analyticsName || editorContainer.props.type, BDFDB.dotCN.textarea);
 				}
 			}
 
@@ -164,12 +191,17 @@ module.exports = (_ => {
 				if (index > -1) this.injectCounter(e.returnvalue, children, e.instance.props.className && e.instance.props.className.indexOf(BDFDB.disCN.usernotepopout) > -1 ? "popoutnote" : "profilenote", "textarea");
 			}
 
-			processChangeIdentity (e) {
-				let [children, index] = BDFDB.ReactUtils.findParent(e.returnvalue, {filter: c => c && c.props && c.props.setNickname});
-				if (index > -1) children.splice(index, 0, BDFDB.ReactUtils.createElement("div", {
-					className: BDFDB.DOMUtils.formatClassName(BDFDB.disCN.charcounter, BDFDB.disCN._charcountercounter, BDFDB.disCN._charcounternickcounter),
-					children: `${(children[index].props.nickname || "").length}/${maxLengths.nick}`
-				}));
+			processNicknameSection (e) {
+				e.returnvalue.props.children = BDFDB.ReactUtils.createElement("div", {
+					className: BDFDB.disCN._charcountercounteradded,
+					children: [
+						e.returnvalue.props.children,
+						BDFDB.ReactUtils.createElement("div", {
+							className: BDFDB.DOMUtils.formatClassName(BDFDB.disCN.charcounter, BDFDB.disCN._charcountercounter, BDFDB.disCN._charcounternickcounter),
+							children: `${(e.instance.props.pendingNick || "").length}/${maxLengths.nick}`
+						})
+					].flat(10)
+				});
 			}
 
 			processCustomStatusModal (e) {
@@ -177,18 +209,19 @@ module.exports = (_ => {
 				if (formItem) this.injectCounter(formItem, formItem.props.children, "customstatus", BDFDB.dotCN.input);
 			}
 			
-			injectCounter (parent, children, type, refClass, parsing, premium) {
-				if (!children) return;
+			injectCounter (parent, children, type, refClass, parsing) {
+				if (!children || nativeCounters.indexOf(type) > -1) return;
 				if (parent.props.className) parent.props.className = BDFDB.DOMUtils.formatClassName(parent.props.className, BDFDB.disCN._charcountercounteradded);
 				else parent.props.children = BDFDB.ReactUtils.createElement("div", {
 					className: BDFDB.disCN._charcountercounteradded,
 					children: parent.props.children
 				});
 				children.push(BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.CharCounter, {
-					className: BDFDB.DOMUtils.formatClassName(BDFDB.disCN._charcountercounter, type && BDFDB.disCN[`_charcounter${typeMap[type] || type}counter`]),
+					className: BDFDB.DOMUtils.formatClassName(BDFDB.disCN._charcountercounter, type && BDFDB.DiscordClasses[`_charcounter${typeMap[type] || type}counter`] && BDFDB.disCN[`_charcounter${typeMap[type] || type}counter`]),
 					refClass: refClass,
 					parsing: parsing,
-					max: maxLengths[type] || (BDFDB.LibraryModules.NitroUtils.canUseIncreasedMessageLength(BDFDB.UserUtils.me) && BDFDB.DiscordUtils.getExperiment("premiumContentLengthAvailable") !== false ? BDFDB.DiscordConstants.MAX_MESSAGE_LENGTH_PREMIUM : BDFDB.DiscordConstants.MAX_MESSAGE_LENGTH),
+					max: maxLengths[type] || (BDFDB.LibraryModules.NitroUtils.canUseIncreasedMessageLength(BDFDB.UserUtils.me) ? BDFDB.DiscordConstants.MAX_MESSAGE_LENGTH_PREMIUM : BDFDB.DiscordConstants.MAX_MESSAGE_LENGTH),
+					showPercentage: this.settings.sliders.showPercentage,
 					onChange: instance => {
 						let node = BDFDB.ReactUtils.findDOMNode(instance);
 						let form = node && BDFDB.DOMUtils.getParent(BDFDB.dotCN.chatform, node);

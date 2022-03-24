@@ -2,7 +2,7 @@
  * @name MessageUtilities
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.9.0
+ * @version 1.9.2
  * @description Adds several Quick Actions for Messages (Delete, Edit, Pin, etc.)
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "MessageUtilities",
 			"author": "DevilBro",
-			"version": "1.9.0",
+			"version": "1.9.2",
 			"description": "Adds several Quick Actions for Messages (Delete, Edit, Pin, etc.)"
-		},
-		"changeLog": {
-			"fixed": {
-				"Reply": "Works again"
-			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -100,8 +87,7 @@ module.exports = (_ => {
 						"Copy_Link":				{name: "Copy Message Link",		func: this.doCopyLink,	value: {click: 0, 	keycombo: [17,81]}	},
 						"__Quote_Message":			{name: "Quote Message",			func: this.doQuote,		value: {click: 0, 	keycombo: [17,87]}, plugin: "CustomQuoter"},
 						"__Note_Message":			{name: "Note Message",			func: this.doNote,		value: {click: 0, 	keycombo: [16]}, 	plugin: "PersonalPins"},
-						"__Translate_Message":		{name: "Translate Message",		func: this.doTranslate,	value: {click: 0, 	keycombo: [20]}, 	plugin: "GoogleTranslateOption"},
-						"__Reveal_Spoilers":		{name: "Reveal All Spoilers",	func: this.doReveal,	value: {click: 0, 	keycombo: [17,74]}, plugin: "RevealAllSpoilersOption"}
+						"__Translate_Message":		{name: "Translate Message",		func: this.doTranslate,	value: {click: 0, 	keycombo: [20]}, 	plugin: "Translator"}
 					}
 				};
 				
@@ -317,6 +303,7 @@ module.exports = (_ => {
 			}
 
 			onClick (event, message) {
+				if (BDFDB.DOMUtils.getParent(BDFDB.dotCNC.messagebuttons + BDFDB.dotCN.spoilerhidden, event.target)) return;
 				let type = event.type;
 				if (!firedEvents.includes(type)) {
 					firedEvents.push(type);
@@ -378,7 +365,7 @@ module.exports = (_ => {
 					let channel = BDFDB.LibraryModules.ChannelStore.getChannel(message.channel_id);
 					if (channel && (BDFDB.UserUtils.can("MANAGE_MESSAGES") || message.author.id == BDFDB.UserUtils.me.id)) {
 						BDFDB.LibraryModules.MessageUtils.deleteMessage(message.channel_id, message.id, message.state != BDFDB.DiscordConstants.MessageStates.SENT);
-						if (toasts[action]) BDFDB.NotificationUtils.toast(this.formatToast(BDFDB.LanguageUtils.LanguageStrings.GUILD_SETTINGS_FOLLOWER_ANALYTICS_MESSAGE_DELETED), {type: "success"});
+						if (toasts[action]) BDFDB.NotificationUtils.toast(this.formatToast(this.labels.toast_message_deleted), {type: "success"});
 					}
 				}
 			}
@@ -459,12 +446,6 @@ module.exports = (_ => {
 					if (channel) BDFDB.BDUtils.getPlugin(this.defaults.bindings.__Translate_Message.plugin).translateMessage(message, channel);
 				}
 			}
-
-			doReveal ({messageDiv, message}, action, event) {
-				if (BDFDB.BDUtils.isPluginEnabled(this.defaults.bindings.__Reveal_Spoilers.plugin)) {
-					BDFDB.BDUtils.getPlugin(this.defaults.bindings.__Reveal_Spoilers.plugin).revealAllSpoilers(messageDiv);
-				}
-			}
 			
 			formatToast (string) {
 				return typeof string == "string" ? (string.endsWith(".") || string.endsWith("!") ? string.slice(0, -1) : string) : "";
@@ -478,6 +459,127 @@ module.exports = (_ => {
 					str.push(Object.keys(clickMap).find(type => clickMap[type] == enabledBindings[action].click));
 				}
 				return str.join("+").replace(/ /g, "");
+			}
+
+			setLabelsByLanguage () {
+				switch (BDFDB.LanguageUtils.getLanguage().id) {
+					case "bg":		// Bulgarian
+						return {
+							toast_message_deleted:				"Съобщението беше успешно изтрито"
+						};
+					case "cs":		// Czech
+						return {
+							toast_message_deleted:				"Zpráva byla úspěšně smazána"
+						};
+					case "da":		// Danish
+						return {
+							toast_message_deleted:				"Beskeden blev slettet"
+						};
+					case "de":		// German
+						return {
+							toast_message_deleted:				"Nachricht wurde erfolgreich gelöscht"
+						};
+					case "el":		// Greek
+						return {
+							toast_message_deleted:				"Το μήνυμα διαγράφηκε με επιτυχία"
+						};
+					case "es":		// Spanish
+						return {
+							toast_message_deleted:				"El mensaje fue eliminado con éxito"
+						};
+					case "fi":		// Finnish
+						return {
+							toast_message_deleted:				"Viesti poistettiin onnistuneesti"
+						};
+					case "fr":		// French
+						return {
+							toast_message_deleted:				"Le message a été supprimé avec succès"
+						};
+					case "hi":		// Hindi
+						return {
+							toast_message_deleted:				"संदेश सफलतापूर्वक हटा दिया गया"
+						};
+					case "hr":		// Croatian
+						return {
+							toast_message_deleted:				"Poruka je uspješno izbrisana"
+						};
+					case "hu":		// Hungarian
+						return {
+							toast_message_deleted:				"Az üzenet sikeresen törölve"
+						};
+					case "it":		// Italian
+						return {
+							toast_message_deleted:				"Il messaggio è stato eliminato con successo"
+						};
+					case "ja":		// Japanese
+						return {
+							toast_message_deleted:				"メッセージは正常に削除されました"
+						};
+					case "ko":		// Korean
+						return {
+							toast_message_deleted:				"메시지가 성공적으로 삭제되었습니다."
+						};
+					case "lt":		// Lithuanian
+						return {
+							toast_message_deleted:				"Laiškas sėkmingai ištrintas"
+						};
+					case "nl":		// Dutch
+						return {
+							toast_message_deleted:				"Bericht is succesvol verwijderd"
+						};
+					case "no":		// Norwegian
+						return {
+							toast_message_deleted:				"Meldingen ble slettet"
+						};
+					case "pl":		// Polish
+						return {
+							toast_message_deleted:				"Wiadomość została pomyślnie usunięta"
+						};
+					case "pt-BR":	// Portuguese (Brazil)
+						return {
+							toast_message_deleted:				"A mensagem foi excluída com sucesso"
+						};
+					case "ro":		// Romanian
+						return {
+							toast_message_deleted:				"Mesajul a fost șters cu succes"
+						};
+					case "ru":		// Russian
+						return {
+							toast_message_deleted:				"Сообщение было успешно удалено"
+						};
+					case "sv":		// Swedish
+						return {
+							toast_message_deleted:				"Meddelandet har raderats"
+						};
+					case "th":		// Thai
+						return {
+							toast_message_deleted:				"ลบข้อความเรียบร้อยแล้ว"
+						};
+					case "tr":		// Turkish
+						return {
+							toast_message_deleted:				"Mesaj başarıyla silindi"
+						};
+					case "uk":		// Ukrainian
+						return {
+							toast_message_deleted:				"Повідомлення було успішно видалено"
+						};
+					case "vi":		// Vietnamese
+						return {
+							toast_message_deleted:				"Tin nhắn đã được xóa thành công"
+						};
+					case "zh-CN":	// Chinese (China)
+						return {
+							toast_message_deleted:				"消息已成功删除"
+						};
+					case "zh-TW":	// Chinese (Taiwan)
+						return {
+							toast_message_deleted:				"消息已成功刪除"
+						};
+					default:		// English
+						return {
+							toast_message_deleted:				"Message was successfully deleted"
+						};
+				}
 			}
 		};
 	})(window.BDFDB_Global.PluginUtils.buildPlugin(config));

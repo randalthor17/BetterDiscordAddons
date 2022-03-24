@@ -2,7 +2,7 @@
  * @name ChatFilter
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 3.5.4
+ * @version 3.5.5
  * @description Allows you to censor Words or block complete Messages/Statuses
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,17 @@ module.exports = (_ => {
 		"info": {
 			"name": "ChatFilter",
 			"author": "DevilBro",
-			"version": "3.5.4",
+			"version": "3.5.5",
 			"description": "Allows you to censor Words or block complete Messages/Statuses"
 		},
 		"changeLog": {
 			"fixed": {
-				"Custom Statuses": ""
+				"Custom Emojis with segmented Searchs": "Custom Emojis no longer cause segmented Searchs to ignore the rest of a sentence"
 			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -502,7 +494,7 @@ module.exports = (_ => {
 				if (nativeEmoji != word) return this.regTest(nativeEmoji, reg);
 				else {
 					let customEmoji = (/<a{0,1}(:.*:)[0-9]{7,}>/i.exec(word) || [])[1];
-					if (customEmoji) return this.regTest(customEmoji, reg);
+					if (customEmoji) return this.regTest(customEmoji, reg) || this.regTest(word, reg);
 					else return this.regTest(word, reg);
 				}
 			}

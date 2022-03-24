@@ -2,7 +2,7 @@
  * @name ServerHider
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 6.2.0
+ * @version 6.2.2
  * @description Allows you to hide certain Servers in your Server List
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "ServerHider",
 			"author": "DevilBro",
-			"version": "6.2.0",
+			"version": "6.2.2",
 			"description": "Allows you to hide certain Servers in your Server List"
-		},
-		"changeLog": {
-			"added": {
-				"Streamer Mode": "Added Option to only hide Servers while in Streamer Mode"
-			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -73,6 +60,8 @@ module.exports = (_ => {
 			return template.content.firstElementChild;
 		}
 	} : (([Plugin, BDFDB]) => {
+		let hiddenEles;
+		
 		return class ServerHider extends Plugin {
 			onLoad () {
 				this.defaults = {
@@ -83,14 +72,16 @@ module.exports = (_ => {
 				
 				this.patchedModules = {
 					after: {
-						Guilds: "render"
+						Guilds: "type"
 					}
 				};
 			}
 			
 			onStart () {
+				hiddenEles = BDFDB.DataUtils.load(this, "hidden");
+				
 				BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.DispatchApiUtils, "dispatch", {after: e => {
-					if (e.methodArguments[0].type == BDFDB.DiscordConstants.ActionTypes.STREAMER_MODE_UPDATE) BDFDB.PatchUtils.forceAllUpdates(this);
+					if (e.methodArguments[0].type == BDFDB.DiscordConstants.ActionTypes.STREAMER_MODE_UPDATE) BDFDB.GuildUtils.rerenderAll(true);
 				}});
 				
 				BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.FolderStore, "getGuildFolderById", {after: e => {
@@ -103,11 +94,11 @@ module.exports = (_ => {
 					}
 				}});
 
-				BDFDB.PatchUtils.forceAllUpdates(this);
+				BDFDB.GuildUtils.rerenderAll();
 			}
 			
 			onStop () {
-				BDFDB.PatchUtils.forceAllUpdates(this);
+				BDFDB.GuildUtils.rerenderAll();
 			}
 
 			getSettingsPanel (collapseStates = {}) {
@@ -132,7 +123,7 @@ module.exports = (_ => {
 							onClick: _ => {
 								BDFDB.ModalUtils.confirm(this, "Are you sure you want to unhide all Servers and Folders?", _ => {
 									BDFDB.DataUtils.save([], this, "hidden");
-									BDFDB.PatchUtils.forceAllUpdates(this);
+									BDFDB.GuildUtils.rerenderAll(true);
 								});
 							},
 							children: BDFDB.LanguageUtils.LanguageStrings.RESET
@@ -172,16 +163,14 @@ module.exports = (_ => {
 									BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuItem, {
 										label: this.labels.submenu_openhidemenu,
 										id: BDFDB.ContextMenuUtils.createItemId(this.name, "openmenu"),
-										action: _ => {
-											this.showHideModal();
-										}
+										action: _ => this.showHideModal()
 									}),
 									!instance.props.guild && !instance.props.folderId ? null : BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuItem, {
 										label: instance.props.guild ? this.labels.submenu_hideserver : this.labels.submenu_hidefolder,
 										id: BDFDB.ContextMenuUtils.createItemId(this.name, "hide"),
 										action: _ => {
-											if (instance.props.guild) this.toggleItem(BDFDB.DataUtils.load(this, "hidden", "servers") || [], instance.props.guild.id, "servers");
-											else this.toggleItem(BDFDB.DataUtils.load(this, "hidden", "folders") || [], instance.props.folderId, "folders");
+											if (instance.props.guild) this.toggleItem(hiddenEles && hiddenEles.servers || [], instance.props.guild.id, "servers");
+											else this.toggleItem(hiddenEles && hiddenEles.folders || [] || [], instance.props.folderId, "folders");
 										}
 									})
 								].filter(n => n)
@@ -192,57 +181,33 @@ module.exports = (_ => {
 			}
 		
 			processGuilds (e) {
-				if (typeof e.returnvalue.props.children == "function") {
-					let childrenRender = e.returnvalue.props.children;
-					e.returnvalue.props.children = (...args) => {
-						let children = childrenRender(...args);
-						this.checkTree(children);
-						return children;
-					};
-				}
-				else this.checkTree(e.returnvalue);
-			}
-			
-			checkTree (returnvalue) {
-				let tree = BDFDB.ReactUtils.findChild(returnvalue, {filter: n => n && n.props && typeof n.props.children == "function"});
-				if (tree) {
-					let childrenRender = tree.props.children;
-					tree.props.children = (...args) => {
-						let children = childrenRender(...args);
-						this.handleGuilds(children);
-						return children;
-					};
-				}
-				else this.handleGuilds(returnvalue);
-			}
-
-			handleGuilds (returnvalue) {
 				if (this.settings.general.onlyHideInStream && !BDFDB.LibraryModules.StreamerModeStore.enabled) return;
-				let hiddenEles = BDFDB.DataUtils.load(this, "hidden");
 				let hiddenGuildIds = hiddenEles.servers || [];
 				let hiddenFolderIds = hiddenEles.folders || [];
 				if (hiddenGuildIds.length || hiddenFolderIds.length) {
-					let [children, index] = BDFDB.ReactUtils.findParent(returnvalue, {props: ["folderId", "guildId"], someProps: true});
+					let [children, index] = BDFDB.ReactUtils.findParent(e.returnvalue, {props: ["folderNode", "guildNode"], someProps: true});
 					if (index > -1) for (let i in children) if (children[i] && children[i].props) {
-						if (children[i].props.folderId) {
-							if (hiddenFolderIds.includes(children[i].props.folderId)) children[i] = null;
+						if (children[i].props.folderNode) {
+							if (hiddenFolderIds.includes(children[i].props.folderNode.id)) children[i] = null;
 							else {
-								let guildIds = [].concat(children[i].props.guildIds.filter(guildId => !hiddenGuildIds.includes(guildId)));
-								if (guildIds.length) {
-									children[i].props.hiddenGuildIds = [].concat(children[i].props.guildIds.filter(guildId => hiddenGuildIds.includes(guildId)));
-									children[i].props.guildIds = guildIds;
+								let guilds = [].concat(children[i].props.folderNode.children.filter(guild => !hiddenGuildIds.includes(guild.id)));
+								if (guilds.length) {
+									children[i].props.hiddenGuildIds = [].concat(children[i].props.folderNode.children.filter(guild => hiddenGuildIds.includes(guild.id)));
+									children[i].props.folderNode = Object.assign({}, children[i].props.folderNode, {children: guilds});
 								}
 								else children[i] = null;
 							}
 						}
-						else if (children[i].props.guildId && hiddenGuildIds.includes(children[i].props.guildId)) children[i] = null;
+						else if (children[i].props.guildNode && hiddenGuildIds.includes(children[i].props.guildNode.id)) children[i] = null;
 					}
 				}
 			}
 
 			showHideModal () {
-				let hiddenGuildIds = BDFDB.DataUtils.load(this, "hidden", "servers") || [];
-				let hiddenFolderIds = BDFDB.DataUtils.load(this, "hidden", "folders") || [];
+				let switchInstances = {};
+				
+				let hiddenGuildIds = hiddenEles && hiddenEles.servers || [];
+				let hiddenFolderIds = hiddenEles && hiddenEles.folders || [];
 				let guilds = BDFDB.LibraryModules.FolderStore.guildFolders.map(n => n.guildIds).flat(10).map(guildId => BDFDB.LibraryModules.GuildStore.getGuild(guildId)).filter(n => n);
 				let folders = BDFDB.LibraryModules.FolderStore.guildFolders.filter(n => n.folderId);
 				let foldersAdded = [];
@@ -253,18 +218,14 @@ module.exports = (_ => {
 					subHeader: "",
 					contentClassName: BDFDB.disCN.listscroller,
 					children: guilds.map((guild, i) => {
-						let folder = folders.find(folder => folder.guildIds.includes(guild.id) && !foldersAdded.includes(folder.folderId));
-						if (folder) foldersAdded.push(folder.folderId);
+						let folder = folders.find(folder => folder.guildIds.includes(guild.id));
+						let firstGuildInFolder = folder && !foldersAdded.includes(folder.folderId);
+						if (firstGuildInFolder) foldersAdded.push(folder.folderId);
 						return [
-							folder ? [
-								folders.indexOf(folder) == 0 ? null : [
-									BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.FormComponents.FormDivider, {
-										className: BDFDB.disCNS.margintop4 + BDFDB.disCN.marginbottom4
-									}),
-									BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.FormComponents.FormDivider, {
-										className: BDFDB.disCNS.margintop8 + BDFDB.disCN.marginbottom4
-									})
-								],
+							firstGuildInFolder ? [
+								!(folders.indexOf(folder) == 0 && i == 0) && BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.FormComponents.FormDivider, {
+									className: BDFDB.disCNS.margintop4 + BDFDB.disCN.marginbottom4
+								}),
 								BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.ListRow, {
 									prefix: BDFDB.ReactUtils.createElement("div", {
 										className: BDFDB.disCN.listavatar,
@@ -289,16 +250,16 @@ module.exports = (_ => {
 									}),
 									suffix: BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.Switch, {
 										value: !hiddenFolderIds.includes(folder.folderId),
-										onChange: value => {this.toggleItem(hiddenFolderIds, folder.folderId, "folders", value);}
+										onChange: value => this.toggleItem(hiddenFolderIds, folder.folderId, "folders", value)
 									})
 								})
 							] : null,
-							i == 0 && !folder ? null : BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.FormComponents.FormDivider, {
+							(i > 0 || folder) && BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.FormComponents.FormDivider, {
 								className: BDFDB.disCNS.margintop4 + BDFDB.disCN.marginbottom4
 							}),
 							BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.ListRow, {
 								prefix: BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.GuildComponents.Guild, {
-									className: BDFDB.disCN.listavatar,
+									className: BDFDB.DOMUtils.formatClassName(BDFDB.disCN.listavatar, folder && BDFDB.disCN.marginleft8),
 									guild: guild,
 									menu: false,
 									tooltip: false
@@ -307,8 +268,9 @@ module.exports = (_ => {
 									children: guild.name
 								}),
 								suffix: BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.Switch, {
+									ref: instance => {if (instance) switchInstances[guild.id] = instance;},
 									value: !hiddenGuildIds.includes(guild.id),
-									onChange: value => {this.toggleItem(hiddenGuildIds, guild.id, "servers", value);}
+									onChange: value => this.toggleItem(hiddenGuildIds, guild.id, "servers", value)
 								})
 							})
 						];
@@ -324,13 +286,12 @@ module.exports = (_ => {
 						onClick: (modal, instance) => {
 							let enabled = hiddenGuildIds.includes(guilds[0].id);
 							hiddenGuildIds = [].concat(enabled ? [] : guilds.map(n => n.id));
-							BDFDB.DataUtils.save(hiddenGuildIds, this, "hidden", "servers");
 							hiddenFolderIds = [].concat(enabled ? [] : folders.map(n => n.folderId));
-							BDFDB.DataUtils.save(hiddenFolderIds, this, "hidden", "folders");
-							let switchInstances = BDFDB.ReactUtils.findOwner(instance, {name: "BDFDB_Switch", all: true, unlimited: true});
-							for (let switchIns of switchInstances) switchIns.props.value = enabled;
-							BDFDB.ReactUtils.forceUpdate(switchInstances);
-							BDFDB.PatchUtils.forceAllUpdates(this);
+							hiddenEles = {servers: hiddenGuildIds, folders: hiddenFolderIds};
+							BDFDB.DataUtils.save(hiddenEles, this, "hidden");
+							for (let i in switchInstances) switchInstances[i].props.value = enabled;
+							BDFDB.ReactUtils.forceUpdate(BDFDB.ObjectUtils.toArray(switchInstances));
+							BDFDB.GuildUtils.rerenderAll(true);
 						}
 					}]
 				});
@@ -340,8 +301,9 @@ module.exports = (_ => {
 				if (!id) return;
 				if (force || (force === undefined && array.includes(id))) BDFDB.ArrayUtils.remove(array, id, true);
 				else array.push(id);
-				BDFDB.DataUtils.save(array, this, "hidden", type);
-				BDFDB.PatchUtils.forceAllUpdates(this);
+				hiddenEles = Object.assign({}, hiddenEles, {[type]: array});
+				BDFDB.DataUtils.save(hiddenEles, this, "hidden");
+				BDFDB.GuildUtils.rerenderAll(true);
 			}
 
 			setLabelsByLanguage () {

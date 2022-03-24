@@ -27,15 +27,7 @@ module.exports = (_ => {
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -190,6 +182,10 @@ module.exports = (_ => {
 						return {
 							created_at:							"Създадено на {{time}}"
 						};
+					case "cs":		// Czech
+						return {
+							created_at:							"Vytvořeno {{time}}"
+						};
 					case "da":		// Danish
 						return {
 							created_at:							"Oprettet den {{time}}"
@@ -213,6 +209,10 @@ module.exports = (_ => {
 					case "fr":		// French
 						return {
 							created_at:							"Créé le {{time}}"
+						};
+					case "hi":		// Hindi
+						return {
+							created_at:							"{{time}} को बनाया गया"
 						};
 					case "hr":		// Croatian
 						return {
@@ -288,7 +288,7 @@ module.exports = (_ => {
 						};
 					case "zh-TW":	// Chinese (Taiwan)
 						return {
-							created_at:							"創建於{{time}}"
+							created_at:							"建立於{{time}}"
 						};
 					default:		// English
 						return {

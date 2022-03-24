@@ -2,7 +2,7 @@
  * @name ChatAliases
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 2.3.2
+ * @version 2.3.3
  * @description Allows you to configure your own Aliases/Commands
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,17 @@ module.exports = (_ => {
 		"info": {
 			"name": "ChatAliases",
 			"author": "DevilBro",
-			"version": "2.3.2",
+			"version": "2.3.3",
 			"description": "Allows you to configure your own Aliases/Commands"
 		},
 		"changeLog": {
 			"improved": {
-				"Autocomplete Menu": ""
+				"Threads": "Works flawlessly with Threads now"
 			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -390,19 +382,19 @@ module.exports = (_ => {
 			}
 			
 			processChannelTextAreaForm (e) {
-				if (!BDFDB.PatchUtils.isPatched(this, e.instance, "handleSendMessage")) BDFDB.PatchUtils.patch(this, e.instance, "handleSendMessage", {before: e2 => {
+				BDFDB.PatchUtils.patch(this, e.instance, "handleSendMessage", {before: e2 => {
 					if (this.settings.places.normal) this.handleSubmit(e, e2, 0);
 				}}, {force: true, noCache: true});
 			}
 			
 			processMessageEditor (e) {
-				if (!BDFDB.PatchUtils.isPatched(this, e.instance, "onSubmit")) BDFDB.PatchUtils.patch(this, e.instance, "onSubmit", {before: e2 => {
+				BDFDB.PatchUtils.patch(this, e.instance, "onSubmit", {before: e2 => {
 					if (this.settings.places.edit) this.handleSubmit(e, e2, 0);
 				}}, {force: true, noCache: true});
 			}
 			
 			processUpload (e) {
-				if (!BDFDB.PatchUtils.isPatched(this, e.instance, "submitUpload")) BDFDB.PatchUtils.patch(this, e.instance, "submitUpload", {before: e2 => {
+				BDFDB.PatchUtils.patch(this, e.instance, "submitUpload", {before: e2 => {
 					if (this.settings.places.upload) this.handleSubmit(e, e2, 1);
 				}}, {force: true, noCache: true});
 			}

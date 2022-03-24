@@ -2,7 +2,7 @@
  * @name BetterNsfwTag
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.2.7
+ * @version 1.2.9
  * @description Adds a more noticeable Tag to NSFW Channels
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "BetterNsfwTag",
 			"author": "DevilBro",
-			"version": "1.2.7",
+			"version": "1.2.9",
 			"description": "Adds a more noticeable Tag to NSFW Channels"
-		},
-		"changeLog": {
-			"fixed": {
-				"Works again": "Yes"
-			}
 		}
 	};
 	
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -80,33 +67,30 @@ module.exports = (_ => {
 						ChannelItem: "default"
 					}
 				};
+				
+				this.css = `
+					${BDFDB.dotCN.channelcontainerdefault}:hover ${BDFDB.dotCN.channeliconitem} + ${BDFDB.dotCN._betternsfwtagtag} {
+						display: none;
+				`;
 			}
 			
 			onStart () {
-				BDFDB.PatchUtils.forceAllUpdates(this);
+				BDFDB.ChannelUtils.rerenderAll();
 			}
 			
 			onStop () {
-				BDFDB.PatchUtils.forceAllUpdates(this);
+				BDFDB.ChannelUtils.rerenderAll();
 			}
 
 			processChannelItem (e) {
-				if (e.instance.props.channel && e.instance.props.channel.nsfw) {
-					let children = BDFDB.ReactUtils.findChild(e.returnvalue, {props: [["className", BDFDB.disCN.channelchildren]]});
-					let childrenChilds = children && BDFDB.ArrayUtils.is(children.props.children) ? children.props.children : BDFDB.ObjectUtils.get(children, "props.children.props.children");
-					if (BDFDB.ArrayUtils.is(childrenChilds)) {
-						let [oldTagParent, oldTagIndex] = BDFDB.ReactUtils.findParent(childrenChilds, {key: "NSFW-badge"});
-						if (oldTagIndex > -1) oldTagParent.splice(oldTagIndex, 1);
-						childrenChilds.push(BDFDB.ReactUtils.createElement("div", {
-							className: BDFDB.disCNS._betternsfwtagtag + BDFDB.disCN.channelchildiconbase,
-							key: "NSFW-badge",
-							children: BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.Badges.TextBadge, {
-								style: {borderRadius: "3px"},
-								text: "NSFW"
-							})
-						}));
-					}
-				}
+				if (e.instance.props.channel && e.instance.props.channel.nsfw && !BDFDB.ReactUtils.findChild(e.instance.props.children, {key: "NFSW_TAG"})) e.instance.props.children.push(BDFDB.ReactUtils.createElement("div", {
+					key: "NFSW_TAG",
+					className: BDFDB.disCNS._betternsfwtagtag + BDFDB.disCN.channelchildiconbase,
+					children: BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.Badges.TextBadge, {
+						style: {borderRadius: "3px"},
+						text: "NSFW"
+					})
+				}));
 			}
 		};
 	})(window.BDFDB_Global.PluginUtils.buildPlugin(config));

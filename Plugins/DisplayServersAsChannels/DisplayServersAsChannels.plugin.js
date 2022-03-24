@@ -2,7 +2,7 @@
  * @name DisplayServersAsChannels
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.5.0
+ * @version 1.5.8
  * @description Displays Servers in a similar way as Channels
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,19 @@ module.exports = (_ => {
 		"info": {
 			"name": "DisplayServersAsChannels",
 			"author": "DevilBro",
-			"version": "1.5.0",
+			"version": "1.5.8",
 			"description": "Displays Servers in a similar way as Channels"
 		},
 		"changeLog": {
-			"fixed": {
-				"Home Button": "Gets changed again"
-			},
+			"improved": {
+				"Voice/Stream Users": "Shows Voice/Stream Users Tooltip when hovering over a Server",
+				"Muted": "Reduces Opacity of DM/Server Name if they are muted",
+				"New Inbox Position": "Works for the new Inbox Position above the Home Button"
+			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -89,13 +83,14 @@ module.exports = (_ => {
 
 				this.patchedModules = {
 					after: {
-						Guilds: "render",
-						DefaultHomeButton: "DefaultHomeButton",
+						Guilds: "type",
+						HomeButton: "type",
 						DirectMessage: "render",
-						Guild: "render",
-						GuildFolder: "render",
+						GuildItem: "type",
+						FolderItem: "default",
+						FolderHeader: "default",
 						CircleIconButton: "render",
-						UnavailableGuildsButton: "UnavailableGuildsButton"
+						UnavailableGuildsButton: "default"
 					}
 				};
 			}
@@ -104,7 +99,7 @@ module.exports = (_ => {
 				BDFDB.DOMUtils.addClass(document.body, BDFDB.disCN._displayserversaschannelsstyled);
 
 				BDFDB.PatchUtils.patch(this, BDFDB.LibraryComponents.GuildComponents.Guild.prototype, "render", {after: e => {
-					if (e.thisObject.props.list) this.processGuild({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"});
+					if (e.thisObject.props.list) this.processGuildItem({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"});
 				}});
 
 				this.forceUpdateAll();
@@ -166,63 +161,40 @@ module.exports = (_ => {
 			}
 		
 			processGuilds (e) {
-				if (typeof e.returnvalue.props.children == "function") {
-					let childrenRender = e.returnvalue.props.children;
-					e.returnvalue.props.children = (...args) => {
-						let children = childrenRender(...args);
-						this.checkTree(children);
-						return children;
-					};
-				}
-				else this.checkTree(e.returnvalue);
-			}
-			
-			checkTree (returnvalue) {
-				let tree = BDFDB.ReactUtils.findChild(returnvalue, {filter: n => n && n.props && typeof n.props.children == "function"});
-				if (tree) {
-					let childrenRender = tree.props.children;
-					tree.props.children = (...args) => {
-						let children = childrenRender(...args);
-						this.handleGuilds(children);
-						return children;
-					};
-				}
-				else this.handleGuilds(returnvalue);
-			}
-			
-			handleGuilds (returnvalue) {
-				let [errorChildren, errorIndex] = BDFDB.ReactUtils.findParent(returnvalue, {name: "FluxContainer(<Unknown>)"});
-				if (errorIndex > -1) errorChildren[errorIndex] = BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.GuildComponents.Items.UnavailableGuildsButton, {
+				let [errorChildren, errorIndex] = BDFDB.ReactUtils.findParent(e.returnvalue, {name: "FluxContainer(<Unknown>)"});
+				if (errorIndex > -1) errorChildren[errorIndex] = BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.GuildComponents.UnavailableGuildsButton, {
 					unavailableGuilds: BDFDB.LibraryModules.GuildUnavailableStore.totalUnavailableGuilds
 				});
-				let scroller = BDFDB.ReactUtils.findChild(returnvalue, {props: [["className", BDFDB.disCN.guildsscroller]]});
+				let scroller = BDFDB.ReactUtils.findChild(e.returnvalue, {props: [["className", BDFDB.disCN.guildsscroller]]});
 				if (scroller) {
 					scroller.props.fade = true;
 					scroller.type = BDFDB.LibraryComponents.Scrollers.Thin;
 				}
 			}
 			
-			processDefaultHomeButton (e) {
+			processHomeButton (e) {
 				this.removeTooltip(e.returnvalue);
-				this.removeMask(e.returnvalue);
+				e.returnvalue = this.removeMask(e.returnvalue);
 				this.addElementName(e.returnvalue, BDFDB.LanguageUtils.LanguageStrings.HOME);
 			}
 			
 			processDirectMessage (e) {
 				if (e.instance.props.channel.id) {
+					if (e.returnvalue.props.children && e.returnvalue.props.children.props) e.returnvalue.props.children.props.className = BDFDB.DOMUtils.formatClassName(e.returnvalue.props.children.props.className, BDFDB.LibraryModules.MutedUtils.isChannelMuted(null, e.instance.props.channel.id) && BDFDB.disCN._displayserversaschannelsmuted);
 					let text = BDFDB.ReactUtils.findValue(e.returnvalue, "text");
 					this.removeTooltip(e.returnvalue);
-					this.removeMask(e.returnvalue);
+					e.returnvalue = this.removeMask(e.returnvalue);
 					this.addElementName(e.returnvalue, text, {
 						isDm: true
 					});
 				}
 			}
 			
-			processGuild (e) {
+			processGuildItem (e) {
 				if (e.instance.props.guild) {
-					if (!BDFDB.BDUtils.isPluginEnabled("ServerDetails")) this.removeTooltip(e.returnvalue);
-					this.removeMask(e.returnvalue);
+					e.returnvalue.props.className = BDFDB.DOMUtils.formatClassName(e.returnvalue.props.className, BDFDB.LibraryModules.MutedUtils.isMuted(e.instance.props.guild.id) && BDFDB.disCN._displayserversaschannelsmuted);
+					if (!BDFDB.BDUtils.isPluginEnabled("ServerDetails")) this.removeTooltip(e.returnvalue, e.instance.props.guild);
+					e.returnvalue = this.removeMask(e.returnvalue);
 					this.addElementName(e.returnvalue, e.instance.props.guild.name, {
 						badges: [
 							this.settings.general.showGuildIcon && BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.GuildComponents.Icon, {
@@ -242,13 +214,18 @@ module.exports = (_ => {
 				}
 			}
 			
-			processGuildFolder (e) {
-				if (e.instance.props.folderId) {
-					this.removeTooltip(e.returnvalue);
-					this.removeMask(e.returnvalue);
-					let folderColor = BDFDB.ColorUtils.convert(e.instance.props.folderColor, "HEX") || "var(--bdfdb-blurple)";
-					let folderSize = Math.round(this.settings.amounts.serverElementHeight * 0.6);
-					this.addElementName(e.returnvalue, e.instance.props.folderName || BDFDB.LanguageUtils.LanguageStrings.SERVER_FOLDER_PLACEHOLDER, {
+			processFolderItem (e) {
+				if (e.instance.props.folderNode) this.removeTooltip(e.returnvalue);
+			}
+			
+			processFolderHeader (e) {
+				if (e.instance.props.folderNode) {
+					e.returnvalue = this.removeMask(e.returnvalue);
+					let folderColor = BDFDB.ColorUtils.convert(e.instance.props.folderNode.color, "HEX") || "var(--bdfdb-blurple)";
+					let folderSize = Math.round(this.settings.amounts.serverElementHeight * 0.725);
+					let [children, index] = BDFDB.ReactUtils.findParent(e.returnvalue, {name: "FolderIconContent"});
+					if (index > -1) children[index] = null;
+					this.addElementName(e.returnvalue, e.instance.props.folderNode.name || BDFDB.LanguageUtils.LanguageStrings.SERVER_FOLDER_PLACEHOLDER, {
 						wrap: true,
 						backgroundColor: e.instance.props.expanded && BDFDB.ColorUtils.setAlpha(folderColor, 0.2),
 						badges: BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.SvgIcon, {
@@ -262,9 +239,23 @@ module.exports = (_ => {
 			}
 			
 			processCircleIconButton (e) {
+				const child = BDFDB.ReactUtils.findChild(e.returnvalue, {filter: n => n.props && n.props.id && typeof n.props.children == "function"});
+				if (child) {
+					let renderChildren = child.props.children;
+					child.props.children = BDFDB.TimeUtils.suppress((...args) => {
+						let childE = {instance: e.instance, returnvalue: renderChildren(...args)};
+						childE.returnvalue = BDFDB.ReactUtils.createElement(BDFDB.ReactUtils.Fragment, {children: childE.returnvalue});
+						this._processCircleIconButton(childE);
+						return childE.returnvalue;
+					});
+				}
+				else this._processCircleIconButton(e);
+			}
+			
+			_processCircleIconButton (e) {
 				this.removeTooltip(e.returnvalue);
-				this.removeMask(e.returnvalue);
-				this.addElementName(e.returnvalue, e.instance.props.tooltipText, {
+				e.returnvalue = this.removeMask(e.returnvalue);
+				this.addElementName(e.returnvalue, e.instance.props.tooltip, {
 					wrap: true,
 					backgroundColor: "transparent"
 				});
@@ -278,13 +269,26 @@ module.exports = (_ => {
 				});
 			}
 			
-			removeTooltip (parent) {
+			removeTooltip (parent, guild) {
 				let [children, index] = BDFDB.ReactUtils.findParent(parent, {name: ["Tooltip", "ListItemTooltip", "GuildTooltip", "BDFDB_TooltipContainer"]});
-				if (index > -1) children[index] = children[index].props.children;
+				if (index > -1) {
+					if (!guild) children[index] = children[index].props.children;
+					else children[index] = BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.TooltipContainer, {
+						text: BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.GuildVoiceList, {
+							guild: guild
+						}),
+						tooltipConfig: {
+							type: "right"
+						},
+						children: children[index].props.children
+					});
+				}
 			}
 			
 			removeMask (parent) {
 				let [children, index] = BDFDB.ReactUtils.findParent(parent, {name: "BlobMask"});
+				let parentIsMask = index == -1 && parent.type.displayName == "BlobMask";
+				if (parentIsMask) [children, index] = [[parent], 0];
 				if (index > -1) {
 					let badges = [];
 					for (let key of Object.keys(children[index].props)) {
@@ -300,16 +304,18 @@ module.exports = (_ => {
 						};
 						if (children[index].props.children && children[index].props.children.props && typeof children[index].props.children.props.children == "function") {
 							let childrenRender = children[index].props.children.props.children;
-							children[index].props.children.props.children = (...args) => {
+							children[index].props.children.props.children = BDFDB.TimeUtils.suppress((...args) => {
 								let renderedChildren = childrenRender(...args);
 								insertBadges(renderedChildren);
 								return renderedChildren;
-							};
+							}, "", this);
 						}
 						else insertBadges(children[index]);
 					}
 					children[index] = children[index].props.children;
+					if (parentIsMask) return children[index];
 				}
+				return parent;
 			}
 			
 			addElementName (parent, name, options = {}) {
@@ -319,7 +325,7 @@ module.exports = (_ => {
 					filter: c => c && c.props && (c.props.id == "home" || !isNaN(parseInt(c.props.id)))
 				});
 				if (index > -1) {
-					let insertElements = returnvalue => {
+					const insertElements = returnvalue => {
 						if (BDFDB.ReactUtils.findChild(parent, {props: [["className", BDFDB.disCN._displayserversaschannelsname]]})) return;
 						let childEles = [
 							[
@@ -350,11 +356,11 @@ module.exports = (_ => {
 					};
 					if (typeof children[index].props.children == "function") {
 						let childrenRender = children[index].props.children;
-						children[index].props.children = (...args) => {
+						children[index].props.children = BDFDB.TimeUtils.suppress((...args) => {
 							let renderedChildren = childrenRender(...args);
 							insertElements(renderedChildren);
 							return renderedChildren;
-						};
+						}, "", this);
 					}
 					else insertElements(children[index]);
 				}
@@ -362,7 +368,7 @@ module.exports = (_ => {
 
 			addCSS () {
 				BDFDB.DOMUtils.appendLocalStyle("DSACStyle" + this.name, `
-					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCN.guildswrapper + BDFDB.notCN.guildswrapperhidden},
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCN.guildswrapper + BDFDB.notCN.guildswrapperhidden}:not(._closed),
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildsscroller},
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildswrapperunreadmentionsbartop},
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildswrapperunreadmentionsbarbottom} {
@@ -380,6 +386,13 @@ module.exports = (_ => {
 						justify-content: flex-start;
 						margin-left: 8px;
 					}
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildinboxicon},
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildinnerwrapper},
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildinner} {
+						width: ${this.settings.amounts.serverListWidth - 20}px;
+						height: ${this.settings.amounts.serverElementHeight}px;
+						border-radius: 4px !important;
+					}
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildsscroller} > div[style*="transform"][style*="height"] {
 						height: unset !important;
 					}
@@ -388,19 +401,33 @@ module.exports = (_ => {
 						left: -8px;
 						transform: scaleY(calc(${this.settings.amounts.serverElementHeight}/48));
 					}
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildinboxicon},
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildiconchildwrapper} {
-						height: ${this.settings.amounts.serverElementHeight}px;
 						width: ${this.settings.amounts.serverListWidth - 20}px;
+						height: ${this.settings.amounts.serverElementHeight}px;
 						padding: 0 8px;
 						box-sizing: border-box;
 						cursor: pointer;
 					}
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildinboxicon}::before {
+						content: attr(aria-label);
+						flex: 1 0 auto;
+						font-size: ${this.settings.amounts.serverElementHeight / 2}px;
+						font-weight: 500;
+						padding-top: 1px;
+					}
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCN.guildinboxtooltip} {
+						display: none;
+					}
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCNS.guildiconchildwrapper + BDFDB.dotCN._displayserversaschannelsname} {
 						flex: 1 1 auto;
 						font-size: ${this.settings.amounts.serverElementHeight / 2}px;
-						font-weight: 400;
+						font-weight: 500;
 						padding-top: 1px;
 						overflow: hidden;
+					}
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCNS._displayserversaschannelsmuted + BDFDB.dotCN._displayserversaschannelsname} {
+						opacity: 0.6;
 					}
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCNS.guildiconchildwrapper + BDFDB.dotCN._displayserversaschannelsbadge}:not(:empty) {
 						display: flex;
@@ -515,12 +542,13 @@ module.exports = (_ => {
 						justify-content: flex-start;
 						align-items: center;
 						font-size: ${this.settings.amounts.serverElementHeight / 2}px;
-						font-weight: 400;
+						font-weight: 500;
 						text-transform: capitalize;
 						padding-top: 1px;
 						padding-left: 8px;
 					}
 
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildplaceholdermask},
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildiconwrapper},
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildfolder},
 					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildbuttoninner},
@@ -528,7 +556,16 @@ module.exports = (_ => {
 						border-radius: 4px;
 						overflow: hidden;
 					}
-					
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildplaceholdermask},
+						background-color: var(--background-primary);
+						border-radius: 4px;
+						height: ${this.settings.amounts.serverElementHeight}px;
+						width: ${this.settings.amounts.serverListWidth}px;
+					}
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCNS.guildswrapper + BDFDB.dotCN.guildplaceholdermask} > *,
+						display: none;
+					}
+
 					${BDFDB.dotCN._displayserversaschannelsstyled} .typingindicator-guild,
 					${BDFDB.dotCN._displayserversaschannelsstyled} .typingindicator-dms,
 					${BDFDB.dotCN._displayserversaschannelsstyled} .typingindicator-folder {
@@ -540,22 +577,17 @@ module.exports = (_ => {
 						z-index: 1 !important;
 					}
 					
-					#server-search ${BDFDB.dotCN.guildinner} {
-						width: ${this.settings.amounts.serverListWidth - 20}px;
-						height: ${this.settings.amounts.serverElementHeight}px;
-						border-radius: 4px !important;
-					}
-					#server-search ${BDFDB.dotCN.guildinner}::before {
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCN.guildswrapper} #server-search ${BDFDB.dotCN.guildinner}::before {
 						content: "Server Search";
 						color: var(--text-normal);
 						display: flex;
 						align-items: center;
 						height: ${this.settings.amounts.serverElementHeight}px;
 						font-size: ${this.settings.amounts.serverElementHeight / 2}px;
-						font-weight: 400;
+						font-weight: 500;
 						padding-left: 8px;
 					}
-					#server-search ${BDFDB.dotCN.guildinner}::after {
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCN.guildswrapper} #server-search ${BDFDB.dotCN.guildinner}::after {
 						content: "";
 						position: absolute;
 						top: ${this.settings.amounts.serverElementHeight/32 * 6}px;
@@ -565,8 +597,8 @@ module.exports = (_ => {
 						background: var(--text-normal);
 						-webkit-mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAxOCAxOCI+PGcgZmlsbD0ibm9uZSIgZmlsbC1ydWxlPSJldmVub2RkIj48cGF0aCBmaWxsPSJ3aGl0ZSIgZD0iTTMuNjAwOTE0ODEsNy4yMDI5NzMxMyBDMy42MDA5MTQ4MSw1LjIwOTgzNDE5IDUuMjA5ODM0MTksMy42MDA5MTQ4MSA3LjIwMjk3MzEzLDMuNjAwOTE0ODEgQzkuMTk2MTEyMDYsMy42MDA5MTQ4MSAxMC44MDUwMzE0LDUuMjA5ODM0MTkgMTAuODA1MDMxNCw3LjIwMjk3MzEzIEMxMC44MDUwMzE0LDkuMTk2MTEyMDYgOS4xOTYxMTIwNiwxMC44MDUwMzE0IDcuMjAyOTczMTMsMTAuODA1MDMxNCBDNS4yMDk4MzQxOSwxMC44MDUwMzE0IDMuNjAwOTE0ODEsOS4xOTYxMTIwNiAzLjYwMDkxNDgxLDcuMjAyOTczMTMgWiBNMTIuMDA1NzE3NiwxMC44MDUwMzE0IEwxMS4zNzMzNTYyLDEwLjgwNTAzMTQgTDExLjE0OTIyODEsMTAuNTg4OTA3OSBDMTEuOTMzNjc2NCw5LjY3NjM4NjUxIDEyLjQwNTk0NjMsOC40OTE3MDk1NSAxMi40MDU5NDYzLDcuMjAyOTczMTMgQzEyLjQwNTk0NjMsNC4zMjkzMzEwNSAxMC4wNzY2MTUyLDIgNy4yMDI5NzMxMywyIEM0LjMyOTMzMTA1LDIgMiw0LjMyOTMzMTA1IDIsNy4yMDI5NzMxMyBDMiwxMC4wNzY2MTUyIDQuMzI5MzMxMDUsMTIuNDA1OTQ2MyA3LjIwMjk3MzEzLDEyLjQwNTk0NjMgQzguNDkxNzA5NTUsMTIuNDA1OTQ2MyA5LjY3NjM4NjUxLDExLjkzMzY3NjQgMTAuNTg4OTA3OSwxMS4xNDkyMjgxIEwxMC44MDUwMzE0LDExLjM3MzM1NjIgTDEwLjgwNTAzMTQsMTIuMDA1NzE3NiBMMTQuODA3MzE4NSwxNiBMMTYsMTQuODA3MzE4NSBMMTIuMjEwMjUzOCwxMS4wMDk5Nzc2IEwxMi4wMDU3MTc2LDEwLjgwNTAzMTQgWiI+PC9wYXRoPjwvZz48L3N2Zz4=') center/cover no-repeat;
 					}
-					#server-search ${BDFDB.dotCN.guildbuttonpill},
-					#server-search ${BDFDB.dotCN.guildsvg} {
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCN.guildswrapper} #server-search ${BDFDB.dotCN.guildbuttonpill},
+					${BDFDB.dotCNS._displayserversaschannelsstyled + BDFDB.dotCN.guildswrapper} #server-search ${BDFDB.dotCN.guildsvg} {
 						display: none;
 					}`);
 			}

@@ -2,7 +2,7 @@
  * @name CustomStatusPresets
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.0.6
+ * @version 1.1.0
  * @description Allows you to save Custom Statuses as Quick Select
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "CustomStatusPresets",
 			"author": "DevilBro",
-			"version": "1.0.6",
+			"version": "1.1.0",
 			"description": "Allows you to save Custom Statuses as Quick Select"
-		},
-		"changeLog": {
-			"added": {
-				"Online Status": "The online status now also gets saved in the preset"
-			}
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -75,6 +62,13 @@ module.exports = (_ => {
 	} : (([Plugin, BDFDB]) => {
 		var _this;
 		var presets = {};
+		
+		const ClearAfterValues = {
+			HOURS_1: 3600000,
+			HOURS_4: 14400000,
+			MINUTES_30: 1800000,
+			TODAY: "TODAY"
+		};
 		
 		const CustomStatusInputComponent = class CustomStatusInput extends BdApi.React.Component {
 			handleChange() {
@@ -289,15 +283,13 @@ module.exports = (_ => {
 						display: flex;
 						align-items: center;
 					}
-.statusItem-33LqPf {
-	grid-template-rows: minmax(24px, auto) 1fr;
-}
 					${BDFDB.dotCN._customstatuspresetsdeletebutton} {
 						display: flex;
 						margin-right: 6px;
 					}
 					${BDFDB.dotCN._customstatuspresetsstatus} {
 						margin-right: 6px;
+						flex: 0 0 auto;
 					}
 					${BDFDB.dotCN._customstatuspresetssortdivider} {
 						background: ${BDFDB.DiscordConstants.Colors.STATUS_GREEN};
@@ -381,19 +373,21 @@ module.exports = (_ => {
 											className: BDFDB.disCN._customstatuspresetsstatus,
 											status: presets[id].status || BDFDB.DiscordConstants.StatusTypes.ONLINE
 										}),
-										presets[id].text
+										BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.TextScroller, {
+											children: presets[id].text
+										})
 									]
 								}),
 								imageUrl: presets[id].emojiInfo && (presets[id].emojiInfo.id ? BDFDB.LibraryModules.IconUtils.getEmojiURL(presets[id].emojiInfo) : BDFDB.LibraryModules.EmojiStateUtils.getURL(presets[id].emojiInfo.name)),
-								hint: !presets[id].clearAfter ? BDFDB.LanguageUtils.LanguageStrings.DISPLAY_OPTION_NEVER : presets[id].clearAfter == BDFDB.LibraryModules.CustomStatusConstants.ClearAfterValues.TODAY ? BDFDB.LanguageUtils.LanguageStrings.CUSTOM_STATUS_TODAY : BDFDB.LanguageUtils.LanguageStringsFormat("CUSTOM_STATUS_HOURS", presets[id].clearAfter/3600000),
+								hint: !presets[id].clearAfter ? BDFDB.LanguageUtils.LanguageStrings.DISPLAY_OPTION_NEVER : presets[id].clearAfter == ClearAfterValues.TODAY ? BDFDB.LanguageUtils.LanguageStrings.CUSTOM_STATUS_TODAY : BDFDB.LanguageUtils.LanguageStringsFormat("CUSTOM_STATUS_HOURS", presets[id].clearAfter/3600000),
 								action: _ => {
 									if (!presets[id]) return;
 									let expiresAt = presets[id].clearAfter ? presets[id].clearAfter : null;
-									if (presets[id].clearAfter === BDFDB.LibraryModules.CustomStatusConstants.ClearAfterValues.TODAY) {
+									if (presets[id].clearAfter === ClearAfterValues.TODAY) {
 										let date = new Date;
 										expiresAt = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime() - date.getTime();
 									}
-									BDFDB.LibraryModules.SettingsUtils.updateRemoteSettings({
+									BDFDB.LibraryModules.SettingsUtilsOld.updateRemoteSettings({
 										status: presets[id].status,
 										customStatus: {
 											text: presets[id].text && presets[id].text.length > 0 ? presets[id].text : null,

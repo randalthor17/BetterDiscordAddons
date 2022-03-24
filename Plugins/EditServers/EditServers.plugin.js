@@ -2,7 +2,7 @@
  * @name EditServers
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 2.3.3
+ * @version 2.3.7
  * @description Allows you to locally edit Servers
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,17 @@ module.exports = (_ => {
 		"info": {
 			"name": "EditServers",
 			"author": "DevilBro",
-			"version": "2.3.3",
+			"version": "2.3.7",
 			"description": "Allows you to locally edit Servers"
 		},
 		"changeLog": {
 			"fixed": {
-				"Invite Icon": "Fixed Icon being squashed for non squarish icons"
+				"Server Header": "Fixed changes not appearing in the Server Header in the Channel List"
 			}
 		}
 	};
 	
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -94,23 +86,23 @@ module.exports = (_ => {
 			
 				this.patchedModules = {
 					before: {
-						Guild: "render",
+						GuildItem: "type",
 						GuildIconWrapper: "render",
 						MutualGuilds: "default",
 						QuickSwitcher: "render",
 						QuickSwitchChannelResult: "render",
 						GuildSidebar: "render",
-						GuildHeader: "render",
+						GuildHeader: "type",
 						InviteGuildName: "GuildName"
 					},
 					after: {
 						RecentsChannelHeader: "default",
-						Guild: "render",
+						GuildItem: "type",
 						BlobMask: "render",
 						GuildIconWrapper: "render",
 						GuildIcon: "render",
 						NavItem: "default",
-						GuildHeader: "render",
+						GuildHeader: "type",
 						WelcomeArea: "default"
 					}
 				};
@@ -137,8 +129,8 @@ module.exports = (_ => {
 				}});
 
 				BDFDB.PatchUtils.patch(this, BDFDB.LibraryComponents.GuildComponents.Guild.prototype, "render", {
-					before: e => {this.processGuild({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"});},
-					after: e => {this.processGuild({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"});}
+					before: e => this.processGuildItem({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"}),
+					after: e => this.processGuildItem({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"})
 				});
 				
 				this.forceUpdateAll();
@@ -201,6 +193,7 @@ module.exports = (_ => {
 				changedGuilds = BDFDB.DataUtils.load(this, "servers");
 				
 				BDFDB.PatchUtils.forceAllUpdates(this);
+				BDFDB.GuildUtils.rerenderAll();
 			}
 		
 			onGuildContextMenu (e) {
@@ -238,10 +231,10 @@ module.exports = (_ => {
 				}
 			}
 
-			processGuild (e) {
+			processGuildItem (e) {
 				if (BDFDB.GuildUtils.is(e.instance.props.guild) && e.instance.props.guild.joinedAt && this.settings.places.guildList) {
-					e.instance.props.guild = this.getGuildData(e.instance.props.guild.id);
-					if (e.returnvalue) {
+					if (!e.returnvalue) e.instance.props.guild = this.getGuildData(e.instance.props.guild.id);
+					else {
 						let data = changedGuilds[e.instance.props.guild.id];
 						if (data && (data.color3 || data.color4)) {
 							let [children, index] = BDFDB.ReactUtils.findParent(e.returnvalue, {name: ["GuildTooltip", "BDFDB_TooltipContainer"]});
@@ -679,7 +672,7 @@ module.exports = (_ => {
 						BDFDB.ReactUtils.forceUpdate(instance);
 					}
 					else instance.checkTimeout = BDFDB.TimeUtils.timeout(_ => {
-						BDFDB.LibraryRequires.request(url, (error, response, result) => {
+						BDFDB.LibraryRequires.request(url, {agentOptions: {rejectUnauthorized: false}}, (error, response, result) => {
 							delete instance.checkTimeout;
 							if (instance.props.disabled) {
 								delete instance.props.success;

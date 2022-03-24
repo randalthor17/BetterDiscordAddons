@@ -2,7 +2,7 @@
  * @name GameActivityToggle
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.0.3
+ * @version 1.0.8
  * @description Adds a Quick-Toggle Game Activity Button
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,25 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "GameActivityToggle",
 			"author": "DevilBro",
-			"version": "1.0.3",
+			"version": "1.0.8",
 			"description": "Adds a Quick-Toggle Game Activity Button"
-		},
-		"changeLog": {
-			"improved": {
-				"Volume": "Now uses same Volume as Mute/Deafen Button"
-			}
 		}
 	};
 	
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -81,18 +68,21 @@ module.exports = (_ => {
 				toggleButton = this;
 			}
 			render() {
+				const enabled = this.props.forceState != undefined ? this.props.forceState : BDFDB.DiscordUtils.getSettings("ShowCurrentGame");
+				delete this.props.forceState;
 				return BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.PanelButton, Object.assign({}, this.props, {
-					tooltipText: BDFDB.LibraryModules.SettingsStore.showCurrentGame ? _this.labels.disable_activity : _this.labels.enable_activity,
+					tooltipText: enabled ? _this.labels.disable_activity : _this.labels.enable_activity,
 					icon: iconProps => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.SvgIcon, Object.assign({}, iconProps, {
 						nativeClass: true,
 						width: 20,
 						height: 20,
 						foreground: BDFDB.disCN.accountinfobuttonstrikethrough,
-						name: BDFDB.LibraryModules.SettingsStore.showCurrentGame ? BDFDB.LibraryComponents.SvgIcon.Names.GAMEPAD : BDFDB.LibraryComponents.SvgIcon.Names.GAMEPAD_DISABLED
+						name: enabled ? BDFDB.LibraryComponents.SvgIcon.Names.GAMEPAD : BDFDB.LibraryComponents.SvgIcon.Names.GAMEPAD_DISABLED
 					})),
 					onClick: _ => {
-						_this.settings.general[!BDFDB.LibraryModules.SettingsStore.showCurrentGame ? "playEnable" : "playDisable"] && BDFDB.LibraryModules.SoundUtils.playSound(_this.settings.selections[!BDFDB.LibraryModules.SettingsStore.showCurrentGame ? "enableSound" : "disableSound"], .4);
-						BDFDB.LibraryModules.SettingsUtils.updateRemoteSettings({showCurrentGame: !BDFDB.LibraryModules.SettingsStore.showCurrentGame})
+						const shouldEnable = !BDFDB.DiscordUtils.getSettings("ShowCurrentGame");
+						_this.settings.general[shouldEnable ? "playEnable" : "playDisable"] && BDFDB.LibraryModules.SoundUtils.playSound(_this.settings.selections[shouldEnable ? "enableSound" : "disableSound"], .4);
+						BDFDB.DiscordUtils.setSettings("ShowCurrentGame", shouldEnable);
 					}
 				}));
 			}
@@ -124,8 +114,21 @@ module.exports = (_ => {
 				};
 			}
 			
-			onStart () {	
-				BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.SettingsUtils, "updateLocalSettings", {after: e => BDFDB.ReactUtils.forceUpdate(toggleButton)});
+			onStart () {
+				let cachedState = BDFDB.DataUtils.load(this, "cachedState");
+				let state = BDFDB.DiscordUtils.getSettings("ShowCurrentGame");
+				if (!cachedState.date || (new Date() - cachedState.date) > 1000*60*60*24*3) {
+					cachedState.value = state;
+					cachedState.date = new Date();
+					BDFDB.DataUtils.save(cachedState, this, "cachedState");
+				}
+				else if (cachedState.value != null && cachedState.value != state) BDFDB.DiscordUtils.setSettings("ShowCurrentGame", cachedState.value);
+				
+				if (BDFDB.LibraryModules.SettingsUtils) BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.SettingsUtils.ShowCurrentGame, "updateSetting", {after: e => {
+					if (toggleButton) toggleButton.props.forceState = e.methodArguments[0];
+					BDFDB.ReactUtils.forceUpdate(toggleButton);
+					BDFDB.DataUtils.save({date: new Date(), value: e.methodArguments[0]}, this, "cachedState");
+				}});
 				
 				BDFDB.PatchUtils.forceAllUpdates(this);
 			}

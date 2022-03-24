@@ -2,7 +2,7 @@
  * @name ServerDetails
  * @author DevilBro
  * @authorId 278543574059057154
- * @version 1.0.6
+ * @version 1.1.2
  * @description Shows Server Details in the Server List Tooltip
  * @invite Jx3TjNS
  * @donate https://www.paypal.me/MircoWittrien
@@ -17,20 +17,12 @@ module.exports = (_ => {
 		"info": {
 			"name": "ServerDetails",
 			"author": "DevilBro",
-			"version": "1.0.6",
+			"version": "1.1.2",
 			"description": "Shows Server Details in the Server List Tooltip"
 		}
 	};
 
-	return (window.Lightcord || window.LightCord) ? class {
-		getName () {return config.info.name;}
-		getAuthor () {return config.info.author;}
-		getVersion () {return config.info.version;}
-		getDescription () {return "Do not use LightCord!";}
-		load () {BdApi.alert("Attention!", "By using LightCord you are risking your Discord Account, due to using a 3rd Party Client. Switch to an official Discord Client (https://discord.com/) with the proper BD Injection (https://betterdiscord.app/)");}
-		start() {}
-		stop() {}
-	} : !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+	return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
 		getName () {return config.info.name;}
 		getAuthor () {return config.info.author;}
 		getVersion () {return config.info.version;}
@@ -82,6 +74,7 @@ module.exports = (_ => {
 				}
 			}
 			render() {
+				if (_this.settings.general.onlyShowOnShift && !this.props.shiftKey) return null;
 				if (_this.settings.amounts.tooltipDelay && !this.state.delayed) {
 					BDFDB.TimeUtils.timeout(_ => {
 						this.state.delayed = true;
@@ -93,16 +86,16 @@ module.exports = (_ => {
 				let owner = BDFDB.LibraryModules.UserStore.getUser(this.props.guild.ownerId);
 				if (!owner && !this.state.fetchedOwner) {
 					this.state.fetchedOwner = true;
-					BDFDB.LibraryModules.UserFetchUtils.getUser(this.props.guild.ownerId).then(_ => BDFDB.ReactUtils.forceUpdate(this));
+					BDFDB.LibraryModules.UserProfileUtils.getUser(this.props.guild.ownerId).then(_ => BDFDB.ReactUtils.forceUpdate(this));
 				}
-				let src = this.props.guild.getIconURL(this.props.guild.icon && BDFDB.LibraryModules.IconUtils.isAnimatedIconHash(this.props.guild.icon));
+				let src = this.props.guild.getIconURL(4096, this.props.guild.icon && BDFDB.LibraryModules.IconUtils.isAnimatedIconHash(this.props.guild.icon));
 				return BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.Flex, {
 					direction: BDFDB.LibraryComponents.Flex.Direction.VERTICAL,
 					align: BDFDB.LibraryComponents.Flex.Align.CENTER,
 					children: [
 						_this.settings.items.icon && (src ? BDFDB.ReactUtils.createElement("img", {
 							className: BDFDB.disCN._serverdetailsicon,
-							src: src.replace(/\?size\=\d+$/, "?size=4096").replace(/[\?\&](height|width)=\d+/g, "")
+							src: src
 						}) : BDFDB.ReactUtils.createElement("div", {
 							className: BDFDB.disCN._serverdetailsicon,
 							children: this.props.guild.acronym
@@ -135,9 +128,9 @@ module.exports = (_ => {
 							prefix: BDFDB.LanguageUtils.LanguageStrings.ROLES,
 							string: Object.keys(this.props.guild.roles).length
 						}),
-						_this.settings.items.region && BDFDB.ReactUtils.createElement(GuildDetailsRowComponent, {
-							prefix: BDFDB.LanguageUtils.LanguageStrings.REGION,
-							string: this.props.guild.region
+						_this.settings.items.language && BDFDB.ReactUtils.createElement(GuildDetailsRowComponent, {
+							prefix: BDFDB.LanguageUtils.LanguageStrings.LANGUAGE,
+							string: BDFDB.LanguageUtils.getName(BDFDB.LanguageUtils.languages[this.props.guild.preferredLocale]) || this.props.guild.preferredLocale
 						})
 					].flat(10).filter(n => n)
 				});
@@ -154,7 +147,7 @@ module.exports = (_ => {
 						children: this.props.string
 					})
 				] : BDFDB.ReactUtils.createElement("div", {
-					children: `${this.props.prefix}: ${this.props.string}`
+					children: `${BDFDB.LibraryModules.StringUtils.upperCaseFirstChar(this.props.prefix)}: ${this.props.string}`
 				});
 			}
 		};
@@ -164,6 +157,9 @@ module.exports = (_ => {
 				_this = this;
 				
 				this.defaults = {
+					general: {
+						onlyShowOnShift:	{value: false,	description: "Only show the Details Tooltip, while holding 'Shift'"}
+					},
 					items: {
 						icon:				{value: true, 	description: "GUILD_CREATE_UPLOAD_ICON_LABEL"},
 						owner:				{value: true, 	description: "GUILD_OWNER"},
@@ -173,7 +169,7 @@ module.exports = (_ => {
 						channels:			{value: true, 	description: "CHANNELS"},
 						roles:				{value: true, 	description: "ROLES"},
 						boosts:				{value: true, 	description: "boosts"},
-						region:				{value: true, 	description: "REGION"}
+						language:			{value: true, 	description: "LANGUAGE"}
 					},
 					dates: {
 						tooltipDates:		{value: {}, 	description: "Tooltip Dates"}
@@ -189,7 +185,7 @@ module.exports = (_ => {
 			
 				this.patchedModules = {
 					after: {
-						Guild: "render"
+						GuildItem: "type"
 					}
 				};
 				
@@ -220,7 +216,7 @@ module.exports = (_ => {
 			
 			onStart () {
 				BDFDB.PatchUtils.patch(this, BDFDB.LibraryComponents.GuildComponents.Guild.prototype, "render", {after: e => {
-					this.processGuild({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"});
+					this.processGuildItem({instance: e.thisObject, returnvalue: e.returnValue, methodname: "render"});
 				}});
 
 				this.forceUpdateAll();
@@ -238,6 +234,18 @@ module.exports = (_ => {
 					collapseStates: collapseStates,
 					children: _ => {
 						let settingsItems = [];
+						
+						settingsItems.push(BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.CollapseContainer, {
+							title: "Settings",
+							collapseStates: collapseStates,
+							children: Object.keys(this.defaults.general).map(key => BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.SettingsSaveItem, {
+								type: "Switch",
+								plugin: this,
+								keys: ["general", key],
+								label: this.defaults.general[key].description,
+								value: this.settings.general[key]
+							}))
+						}));
 						
 						settingsItems.push(BDFDB.ReactUtils.createElement(BDFDB.LibraryComponents.CollapseContainer, {
 							title: "Tooltip Items",
@@ -316,10 +324,10 @@ module.exports = (_ => {
 					}
 				`);
 				
-				BDFDB.PatchUtils.forceAllUpdates(this);
+				BDFDB.GuildUtils.rerenderAll();
 			}
-
-			processGuild (e) {
+			
+			processGuildItem (e) {
 				if (BDFDB.GuildUtils.is(e.instance.props.guild)) {
 					let tooltipContainer;
 					let [children, index] = BDFDB.ReactUtils.findParent(e.returnvalue, {name: ["GuildTooltip", "BDFDB_TooltipContainer"]});
@@ -334,7 +342,8 @@ module.exports = (_ => {
 							list: true,
 							offset: 12
 						}),
-						text: _ => BDFDB.ReactUtils.createElement(GuildDetailsComponent, {
+						text: (instance, event) => BDFDB.ReactUtils.createElement(GuildDetailsComponent, {
+							shiftKey: event.shiftKey,
 							tooltipContainer: tooltipContainer,
 							guild: e.instance.props.guild
 						})
